@@ -37,7 +37,7 @@ Gaussian clusters in $\mathbb{R}^d$:
 - **Cluster centers** placed by **rejection sampling** in the box
   $[-\text{spread}, \text{spread}]^d$ subject to a guard band: every
   pair of centers must satisfy
-  $\lVert \mu_c - \mu_{c'} \rVert_2  \ge  m \cdot \sigma_{\mathrm{cluster}}$
+  $`\lVert \mu_c - \mu_{c'} \rVert_2 \ge m \cdot \sigma_{\mathrm{cluster}}`$
   for a margin $m$ (default $m = 4$). With $m = 4$, the
   $2\sigma$ balls of any two clusters do not intersect, so the
   generative cluster label is essentially the same as the
@@ -149,9 +149,11 @@ checks confirm the equations of §2 are the right ones.
 
 ### 4.1 Cavity-marginal re-derivation
 
-The off-diagonal $A_{ka}$ in §2 is exactly the ratio of the cavity
-marginals $P^{\mathcal{E}}_{ka}(x_{ka} = 0) / P^{\mathcal{E}}_{ka}(x_{ka} = 1)$
-expressed in log form. The intermediate cancellation steps in
+The off-diagonal $A_{ka}$ in §2 is exactly the log-ratio of the
+exemplar-side cavity marginals,
+
+$$A_{ka} = -T \log \frac{P^{\mathcal{E}}_{ka}(x_{ka} = 0)}{P^{\mathcal{E}}_{ka}(x_{ka} = 1)} .$$
+ The intermediate cancellation steps in
 Appendix C produce this same expression once the additive ``$1$''
 arising from the $x_{aa} = 0$ branch is kept outside the entire
 product over competing assignments to exemplar $a$ (rather than
@@ -230,10 +232,10 @@ combinatorial size exceeds the configured cap (default $5$M).
 | Metric | Definition | Direction | What it measures |
 |---|---|---|---|
 | $K_{\mathrm{self}}$ | $\lvert \{a^\star_k : k = 1, \dots, N\} \rvert$ | match $K_{\mathrm{true}}$ | Number of exemplars chosen by the solver |
-| $S$ | $\sum_{e \in \mathcal{E}} w_{ee} + \sum_{k \notin \mathcal{E}} \max_{a \in \mathcal{E}} w_{ka}$ | higher is better | Constraint-respecting sum-similarity (the actual objective; combines partition quality and within-cluster exemplar choice) |
+| $S$ | $`\sum_{e \in \mathcal{E}} w_{ee} + \sum_{k \notin \mathcal{E}} \max_{a \in \mathcal{E}} w_{ka}`$ | higher is better | Constraint-respecting sum-similarity (the actual objective; combines partition quality and within-cluster exemplar choice) |
 | $S_{\mathrm{partition}}$ | $S$ evaluated after replacing each cluster's chosen exemplar with that cluster's medoid | higher is better | Sum-similarity of the *partition only*, with the within-cluster exemplar-choice contribution removed |
-| Gap | $(S_{\mathrm{opt}} - S) / \lvert S_{\mathrm{opt}} \rvert \cdot 100\%$ | lower is better, $0$ matches optimum | Relative optimality gap on $S$ |
-| Partition gap | $(S_{\mathrm{opt}} - S_{\mathrm{partition}}) / \lvert S_{\mathrm{opt}} \rvert \cdot 100\%$ | lower is better, $0$ means the partition is optimal | Relative gap of the partition-only score |
+| Gap | $`(S_{\mathrm{opt}} - S) / \lvert S_{\mathrm{opt}} \rvert \cdot 100\%`$ | lower is better, $0$ matches optimum | Relative optimality gap on $S$ |
+| Partition gap | $`(S_{\mathrm{opt}} - S_{\mathrm{partition}}) / \lvert S_{\mathrm{opt}} \rvert \cdot 100\%`$ | lower is better, $0$ means the partition is optimal | Relative gap of the partition-only score |
 
 The two gap metrics decompose the total optimality gap into a
 partition error and an exemplar-choice error: the partition gap
