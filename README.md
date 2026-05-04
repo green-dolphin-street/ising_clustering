@@ -65,7 +65,7 @@ readily a point becomes its own exemplar; higher (less negative)
 values favor more clusters. Following Frey & Dueck (2007), we default
 to the median of the off-diagonal similarities,
 
-$$w_{aa} \;=\; \mathrm{Quantile}_q\!\left(\{w_{kb}\}_{k \ne b}\right), \qquad q = 0.5.$$
+$$w_{aa} = \mathrm{Quantile}_q\!\left(\{w_{kb}\}_{k \ne b}\right), \qquad q = 0.5.$$
 
 ---
 
