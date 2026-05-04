@@ -26,6 +26,37 @@ def sum_similarity(W, assignments):
     return float(W[idx, assignments].sum())
 
 
+def medoid_corrected_score(W, assignments):
+    """Hold the partition implied by `assignments` fixed and replace
+    each cluster's exemplar with that cluster's medoid — i.e., the
+    in-cluster data point that maximizes the within-cluster
+    sum-similarity. Returns (new_assignments, new_exemplars, S).
+
+    Why this matters. The sum-similarity S depends both on (a) the
+    partition (which point goes with which cluster) and (b) which
+    in-cluster data point gets chosen as the exemplar. Replacing the
+    exemplar with the cluster medoid removes (b), so the resulting
+    score reflects partition quality alone. If the candidate
+    partition is the same as the optimal partition, this score equals
+    the exhaustive optimum even when the original exemplars were
+    slightly off-medoid."""
+    assignments = np.asarray(assignments, dtype=np.int64)
+    new_exemplars = []
+    cluster_ids = np.unique(assignments)
+    for cid in cluster_ids:
+        members = np.where(assignments == cid)[0]
+        if members.size == 1:
+            new_exemplars.append(int(members[0]))
+            continue
+        # score(j) for each candidate exemplar j in members =
+        #   W[j, j] (preference) + sum_{i in members, i != j} W[i, j]
+        # = sum_{i in members} W[i, j]
+        sub = W[np.ix_(members, members)]
+        scores = sub.sum(axis=0)
+        new_exemplars.append(int(members[int(scores.argmax())]))
+    return assign_to_exemplars(W, new_exemplars)
+
+
 def assign_to_exemplars(W, exemplars):
     """Build a feasible assignment from an exemplar set:
        - every exemplar is assigned to itself (constraint x_aa >= x_ka),

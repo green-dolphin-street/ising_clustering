@@ -1,2 +1,3 @@
 manuscript.*
 /__pycache__/
+settings.local.json

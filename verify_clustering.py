@@ -17,7 +17,8 @@ from dataset import generate_gaussian_clusters, compute_similarity_matrix
 from solver import SelfConsistencySolver
 from benchmarks import (sum_similarity, assign_to_exemplars,
                         self_consistency_score, kmeans_baseline,
-                        greedy_baseline, exhaustive_optimum, gap_pct)
+                        greedy_baseline, exhaustive_optimum, gap_pct,
+                        medoid_corrected_score)
 
 
 def run_one(n_clusters_true=4, n_per_cluster=15, dim=2,
@@ -47,7 +48,11 @@ def run_one(n_clusters_true=4, n_per_cluster=15, dim=2,
     solver.run(verbose=False)
     sc_assn, sc_ex, S_sc = self_consistency_score(solver, W)
     K_self = len(sc_ex)
-    print(f"\n[Self-consistency]  K_self={K_self}  S={S_sc:.4f}")
+    # Partition-only score: keep the partition, replace each
+    # exemplar with its cluster medoid.
+    _, _, S_partition = medoid_corrected_score(W, sc_assn)
+    print(f"\n[Self-consistency]  K_self={K_self}  "
+          f"S={S_sc:.4f}  S_partition={S_partition:.4f}")
 
     # 2. Optimal at K_self (if combinatorially feasible)
     opt = exhaustive_optimum(W, K_self, max_combinations=exhaustive_cap)
@@ -80,14 +85,17 @@ def run_one(n_clusters_true=4, n_per_cluster=15, dim=2,
     # Gap reporting
     if S_opt is not None:
         print("\n  Optimality gap from S_opt (lower is better):")
-        print(f"    self-consistency : {gap_pct(S_sc,       S_opt):6.2f} %")
-        print(f"    greedy           : {gap_pct(S_g,        S_opt):6.2f} %")
+        print(f"    self-consistency       : {gap_pct(S_sc,       S_opt):6.2f} %")
+        print(f"    self-consistency (part): {gap_pct(S_partition, S_opt):6.2f} % "
+              f"(partition only)")
+        print(f"    greedy                 : {gap_pct(S_g,        S_opt):6.2f} %")
         if S_km_self is not None:
-            print(f"    K-means @ K_self : {gap_pct(S_km_self, S_opt):6.2f} %")
+            print(f"    K-means @ K_self       : {gap_pct(S_km_self, S_opt):6.2f} %")
 
     return dict(
         N=N, K_true=n_clusters_true, K_self=K_self,
-        S_self=S_sc, S_opt=S_opt, S_greedy=S_g,
+        S_self=S_sc, S_partition=S_partition,
+        S_opt=S_opt, S_greedy=S_g,
         S_km_self=S_km_self, S_km_true=S_km_true,
     )
 
@@ -113,16 +121,20 @@ def main():
     print("SUMMARY (sum-similarity S; smaller |gap| from optimum is better)")
     print("=" * 70)
     print(f"{'N':>4} {'Ktrue':>5} {'Kself':>5} "
-          f"{'S_self':>10} {'S_opt':>10} {'gap%':>7} "
+          f"{'S_self':>10} {'S_part':>10} {'S_opt':>10} "
+          f"{'gap%':>7} {'partGap%':>9} "
           f"{'S_greedy':>10} {'S_kmK':>10}")
     for r in summaries:
         gap = gap_pct(r['S_self'], r['S_opt'])
+        pgap = gap_pct(r['S_partition'], r['S_opt'])
         gap_str = f"{gap:6.2f}" if gap is not None else "  n/a"
+        pgap_str = f"{pgap:8.2f}" if pgap is not None else "    n/a"
         opt_str = f"{r['S_opt']:10.3f}" if r['S_opt'] is not None else "       n/a"
         kmk_str = (f"{r['S_km_self']:10.3f}"
                    if r['S_km_self'] is not None else "       n/a")
         print(f"{r['N']:>4} {r['K_true']:>5} {r['K_self']:>5} "
-              f"{r['S_self']:10.3f} {opt_str} {gap_str:>7} "
+              f"{r['S_self']:10.3f} {r['S_partition']:10.3f} {opt_str} "
+              f"{gap_str:>7} {pgap_str:>9} "
               f"{r['S_greedy']:10.3f} {kmk_str}")
 
 

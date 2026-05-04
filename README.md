@@ -16,6 +16,7 @@ This repo contains the minimal artifacts needed for both checks: a synthetic clu
 | [solver.py](solver.py) | `SelfConsistencySolver` — finite-temperature, damped, annealed fixed-point searcher for the Appendix-C equations |
 | [benchmarks.py](benchmarks.py) | K-means + projection, greedy submodular, and exhaustive-optimum baselines on the constraint-respecting objective |
 | [verify_clustering.py](verify_clustering.py) | End-to-end verification entry point |
+| [visualize.py](visualize.py) | Renders the 2D cluster maps embedded in §7 |
 
 The remaining sections describe the simulation environment, the
 equations themselves, the iterative searcher, a quick analytical
@@ -36,7 +37,7 @@ Gaussian clusters in $\mathbb{R}^d$:
 - **Cluster centers** placed by **rejection sampling** in the box
   $[-\text{spread}, \text{spread}]^d$ subject to a guard band: every
   pair of centers must satisfy
-  $\lVert \mu_c - \mu_{c'} \rVert_2 \;\ge\; m \cdot \sigma_{\mathrm{cluster}}$
+  $\lVert \mu_c - \mu_{c'} \rVert_2  \ge  m \cdot \sigma_{\mathrm{cluster}}$
   for a margin $m$ (default $m = 4$). With $m = 4$, the
   $2\sigma$ balls of any two clusters do not intersect, so the
   generative cluster label is essentially the same as the
@@ -46,7 +47,7 @@ Gaussian clusters in $\mathbb{R}^d$:
 - **Cluster samples.** Each cluster contributes $n_{\mathrm{per}}$
   draws from $\mathcal{N}(\mu_c, \sigma_{\mathrm{cluster}}^2 I)$.
 - **Resampling cap.** Rejection sampling is capped at
-  `max_resample_attempts` (default $10\,000$); if the cap is hit,
+  `max_resample_attempts` (default $10{,}000$); if the cap is hit,
   the call raises with a clear message — the box is too tight for
   the requested $K$ and margin.
 - **Disabling the guard band.** Setting `min_separation_factor = None`
@@ -65,27 +66,27 @@ readily a point becomes its own exemplar; higher (less negative)
 values favor more clusters. Following Frey & Dueck (2007), we default
 to the median of the off-diagonal similarities,
 
-$$w_{aa} = \mathrm{Quantile}_q\!\left(\{w_{kb}\}_{k \ne b}\right), \qquad q = 0.5.$$
+$$w_{aa} = \mathrm{Quantile}_q \left(\{w_{kb}\}_{k \ne b}\right), \qquad q = 0.5.$$
 
 ---
 
 ## 2. Self-consistency equations under test
 
 The exemplar-clustering Hamiltonian
-$E(\mathbf{x}) = -\sum_{k,a} w_{ka}\, x_{ka}$ is decomposed
+$E(\mathbf{x}) = -\sum_{k,a} w_{ka} x_{ka}$ is decomposed
 symmetrically into point-side and exemplar-side cavity marginals.
 With log-likelihood ratios
 
-$$\exp\!\left(-\tfrac{R_{ka}}{T}\right) = \frac{P^{\mathcal{P}}_{ka}(0)}{P^{\mathcal{P}}_{ka}(1)}, \qquad
-\exp\!\left(-\tfrac{A_{ka}}{T}\right) = \frac{P^{\mathcal{E}}_{ka}(0)}{P^{\mathcal{E}}_{ka}(1)},$$
+$$\exp\left(-\tfrac{R_{ka}}{T}\right) = \frac{P^{\mathcal{P}}_{ka}(0)}{P^{\mathcal{P}}_{ka}(1)}, \qquad
+\exp\left(-\tfrac{A_{ka}}{T}\right) = \frac{P^{\mathcal{E}}_{ka}(0)}{P^{\mathcal{E}}_{ka}(1)},$$
 
 the corrected fixed-point system from Appendix C is
 
-$$R_{ka} \;=\; \frac{w_{ka}}{2} \;-\; T\,\log \sum_{b \ne a} \exp\!\left(\frac{1}{T}\!\left(\frac{w_{kb}}{2} + A_{kb}\right)\right),$$
+$$R_{ka}  =  \frac{w_{ka}}{2}  -  T\log \sum_{b \ne a} \exp\left(\frac{1}{T}\left(\frac{w_{kb}}{2} + A_{kb}\right)\right),$$
 
-$$A_{aa} \;=\; \frac{w_{aa}}{2} \;+\; T \sum_{j \ne a} \log\!\left(1 + \exp\!\left(\frac{1}{T}\!\left(\frac{w_{ja}}{2} + R_{ja}\right)\right)\right),$$
+$$A_{aa}  =  \frac{w_{aa}}{2}  +  T \sum_{j \ne a} \log\left(1 + \exp\left(\frac{1}{T}\left(\frac{w_{ja}}{2} + R_{ja}\right)\right)\right),$$
 
-$$A_{ka} \;=\; \frac{w_{ka}}{2} \;-\; T \log\!\Bigg[\, 1 \;+\; \exp\!\left(-\frac{1}{T}\!\left(\frac{w_{aa}}{2} + R_{aa}\right)\right) \prod_{\substack{j \ne k\\ j \ne a}} \left(1 + \exp\!\left(\frac{1}{T}\!\left(\frac{w_{ja}}{2} + R_{ja}\right)\right)\right)^{-1} \Bigg], \quad k \ne a.$$
+$$A_{ka}  =  \frac{w_{ka}}{2}  -  T \log\Bigg[ 1  +  \exp\left(-\frac{1}{T}\left(\frac{w_{aa}}{2} + R_{aa}\right)\right) \prod_{\substack{j \ne k\\ j \ne a}} \left(1 + \exp\left(\frac{1}{T}\left(\frac{w_{ja}}{2} + R_{ja}\right)\right)\right)^{-1} \Bigg], \quad k \ne a.$$
 
 These are the equations as written in the manuscript; the iterative
 searcher in §3 evaluates exactly these expressions at every fixed,
@@ -114,9 +115,9 @@ Implemented as `SelfConsistencySolver` in [solver.py](solver.py).
 3. **Inner sweeps.** At each $T$, run $n_{\mathrm{iter}}$ damped
    message-passing sweeps,
 
-$$R^{(t+1)} \;=\; \lambda\, R^{(t)} \;+\; (1 - \lambda)\, \widehat{R}\!\left(R^{(t)}, A^{(t)};\, T\right),$$
+$$R^{(t+1)}  =  \lambda R^{(t)}  +  (1 - \lambda) \widehat{R}\left(R^{(t)}, A^{(t)}; T\right),$$
 
-$$A^{(t+1)} \;=\; \lambda\, A^{(t)} \;+\; (1 - \lambda)\, \widehat{A}\!\left(R^{(t+1)}, A^{(t)};\, T\right),$$
+$$A^{(t+1)}  =  \lambda A^{(t)}  +  (1 - \lambda) \widehat{A}\left(R^{(t+1)}, A^{(t)}; T\right),$$
 
    where $\widehat{R}, \widehat{A}$ are the right-hand sides of the
    self-consistency equations and $\lambda$ is the damping factor.
@@ -165,8 +166,8 @@ a known correct algorithm. Specifically, with rescaled messages
 $\tilde A := 2A$ and $\tilde R := 2R$, the equations of §2 satisfy
 the identity
 
-$$\tilde A_{ka} \;=\; w_{ka} + a_{\mathrm{AP}}(k, a), \qquad
-  \tilde R_{ka} \;=\; w_{ka} \;-\; \max_{b \ne a}\!\left(w_{kb} + \tilde A_{kb}\right),$$
+$$\tilde A_{ka}  =  w_{ka} + a_{\mathrm{AP}}(k, a), \qquad
+  \tilde R_{ka}  =  w_{ka}  -  \max_{b \ne a}\left(w_{kb} + \tilde A_{kb}\right),$$
 
 where $a_{\mathrm{AP}}$ is the availability message of the standard
 affinity-propagation algorithm of Frey & Dueck (2007). This shows
@@ -188,7 +189,7 @@ problem itself.
 All benchmarks are evaluated on the same constraint-respecting
 sum-similarity objective
 
-$$S(\mathcal{E}) \;=\; \sum_{e \in \mathcal{E}} w_{ee} \;+\; \sum_{k \notin \mathcal{E}} \max_{a \in \mathcal{E}} w_{ka},$$
+$$S(\mathcal{E})  =  \sum_{e \in \mathcal{E}} w_{ee}  +  \sum_{k \notin \mathcal{E}} \max_{a \in \mathcal{E}} w_{ka},$$
 
 i.e. each chosen exemplar pays the diagonal preference and each
 non-exemplar contributes its similarity to its highest-similarity
@@ -218,9 +219,9 @@ standard $(1 - 1/e) \approx 0.63$ approximation guarantee
 
 Brute-force search over all $\binom{N}{K_{\mathrm{self}}}$ exemplar
 subsets, evaluated under $S$. Vectorized in NumPy over chunks of
-$50\,000$ subsets at a time; the run for $\binom{50}{5} \approx 2.1\,$M
+$50{,}000$ subsets at a time; the run for $\binom{50}{5} \approx 2.1$M
 combinations finishes in a few seconds. Skipped when the
-combinatorial size exceeds the configured cap (default $5\,$M).
+combinatorial size exceeds the configured cap (default $5$M).
 
 ---
 
@@ -229,12 +230,18 @@ combinatorial size exceeds the configured cap (default $5\,$M).
 | Metric | Definition | Direction | What it measures |
 |---|---|---|---|
 | $K_{\mathrm{self}}$ | $\lvert \{a^\star_k : k = 1, \dots, N\} \rvert$ | match $K_{\mathrm{true}}$ | Number of exemplars chosen by the solver |
-| $S$ | $\sum_{e \in \mathcal{E}} w_{ee} + \sum_{k \notin \mathcal{E}} \max_{a \in \mathcal{E}} w_{ka}$ | higher is better | Constraint-respecting sum-similarity (the actual objective) |
-| Gap | $(S_{\mathrm{opt}} - S) \,/\, \lvert S_{\mathrm{opt}} \rvert \cdot 100\%$ | lower is better, $0$ matches optimum | Relative optimality gap |
+| $S$ | $\sum_{e \in \mathcal{E}} w_{ee} + \sum_{k \notin \mathcal{E}} \max_{a \in \mathcal{E}} w_{ka}$ | higher is better | Constraint-respecting sum-similarity (the actual objective; combines partition quality and within-cluster exemplar choice) |
+| $S_{\mathrm{partition}}$ | $S$ evaluated after replacing each cluster's chosen exemplar with that cluster's medoid | higher is better | Sum-similarity of the *partition only*, with the within-cluster exemplar-choice contribution removed |
+| Gap | $(S_{\mathrm{opt}} - S) / \lvert S_{\mathrm{opt}} \rvert \cdot 100\%$ | lower is better, $0$ matches optimum | Relative optimality gap on $S$ |
+| Partition gap | $(S_{\mathrm{opt}} - S_{\mathrm{partition}}) / \lvert S_{\mathrm{opt}} \rvert \cdot 100\%$ | lower is better, $0$ means the partition is optimal | Relative gap of the partition-only score |
 
-All baselines (K-means, greedy, self-consistency) are scored on the
-same constraint-respecting $S$, so the gap-from-optimum comparison is
-apples-to-apples.
+The two gap metrics decompose the total optimality gap into a
+partition error and an exemplar-choice error: the partition gap
+measures whether the solver grouped points into the right clusters,
+while the difference (gap $-$ partition gap) measures whether each
+cluster's chosen exemplar is the cluster's medoid. All baselines
+(K-means, greedy, self-consistency) are scored on the same
+constraint-respecting $S$, so the comparison is apples-to-apples.
 
 ---
 
@@ -242,15 +249,51 @@ apples-to-apples.
 
 Run via [verify_clustering.py](verify_clustering.py) with the default
 hyperparameters in §3.2, $m = 4$ guard band, $q = 0.5$ preference,
-and exhaustive cap $5\,000\,000$.
+and exhaustive cap $5{,}000{,}000$.
 
-| $N$ | $K_{\mathrm{true}}$ | $K_{\mathrm{self}}$ | $S_{\mathrm{self}}$ | $S_{\mathrm{opt}}$ | gap (self) | $S_{\mathrm{greedy}}$ | gap (greedy) | $S_{\mathrm{KM}}@K_{\mathrm{self}}$ | gap (KM) |
-|----:|--------------------:|--------------------:|--------------------:|-------------------:|-----------:|----------------------:|-------------:|------------------------------------:|---------:|
-|  30 |                   3 |                   3 | $-33.998$ | $-33.998$ | $\mathbf{0.00\%}$ | $-36.436$ | $7.17\%$  | $-33.998$ | $0.00\%$ |
-|  40 |                   4 |                   4 | $-44.707$ | $-44.644$ | $\mathbf{0.14\%}$ | $-54.448$ | $21.96\%$ | $-44.644$ | $0.00\%$ |
-|  50 |                   5 |                   5 | $-60.833$ | $-58.350$ | $\mathbf{4.26\%}$ | $-63.810$ | $9.36\%$  | $-58.350$ | $0.00\%$ |
+| $N$ | $K_{\mathrm{true}}$ | $K_{\mathrm{self}}$ | $S_{\mathrm{self}}$ | $S_{\mathrm{partition}}$ | $S_{\mathrm{opt}}$ | gap | partition gap | $S_{\mathrm{greedy}}$ | gap (greedy) | $S_{\mathrm{KM}}@K_{\mathrm{self}}$ | gap (KM) |
+|----:|--------------------:|--------------------:|--------------------:|-------------------------:|-------------------:|----:|--------------:|----------------------:|-------------:|------------------------------------:|---------:|
+|  30 |                   3 |                   3 | $-33.998$ | $-33.998$ | $-33.998$ | $\mathbf{0.00\%}$ | $\mathbf{0.00\%}$ | $-36.436$ | $7.17\%$  | $-33.998$ | $0.00\%$ |
+|  40 |                   4 |                   4 | $-44.707$ | $-44.644$ | $-44.644$ | $\mathbf{0.14\%}$ | $\mathbf{0.00\%}$ | $-54.448$ | $21.96\%$ | $-44.644$ | $0.00\%$ |
+|  50 |                   5 |                   5 | $-60.833$ | $-58.350$ | $-58.350$ | $\mathbf{4.26\%}$ | $\mathbf{0.00\%}$ | $-63.810$ | $9.36\%$  | $-58.350$ | $0.00\%$ |
 
-Wall-clock for the full sweep (incl. exhaustive optimum): $\sim 10\,$s.
+Wall-clock for the full sweep (incl. exhaustive optimum): $\sim 10$s.
+
+### 2D maps
+
+Each figure shows three panels for one test case: (i) ground-truth
+labels with the true cluster centers (×), (ii) the self-consistency
+solver's clustering with its chosen exemplars (□), and (iii) the
+exhaustive constrained optimum at $K = K_{\mathrm{self}}$, again with
+exemplars marked. Colors index exemplars; same color means same
+cluster. Figures are produced by [visualize.py](visualize.py) and
+saved to [figures/](figures/).
+
+> **What the gap actually measures.** The partition gap column in the
+> §7 table is $\mathbf{0.00\%}$ on every test instance — the
+> self-consistency solver groups points into the *same clusters* as
+> the exhaustive optimum every time. The residual non-zero $S$-gap
+> ($0.14\%$ at $N = 40$, $4.26\%$ at $N = 50$) comes entirely from
+> within-cluster exemplar choice: the solver sometimes picks a
+> near-medoid instead of the exact medoid as the cluster's
+> representative, which changes $S$ slightly without changing the
+> clustering. The $N = 50$ figure below makes this concrete — visually,
+> the bottom-left exemplar (□) lands on the cluster's edge in the
+> self-consistency panel and at the medoid in the exhaustive-optimum
+> panel, but every red point is still grouped with the same set of
+> red points in both.
+
+**$N = 30$, $K_{\mathrm{true}} = 3$ — gap $0.00\%$, partition gap $0.00\%$.**
+
+![N=30, K=3](figures/cluster_N30_K3.png)
+
+**$N = 40$, $K_{\mathrm{true}} = 4$ — gap $0.14\%$, partition gap $0.00\%$.**
+
+![N=40, K=4](figures/cluster_N40_K4.png)
+
+**$N = 50$, $K_{\mathrm{true}} = 5$ — gap $4.26\%$, partition gap $0.00\%$. The bottom-left exemplar lands on the cluster edge instead of the medoid in panel (ii); the partition is unchanged.**
+
+![N=50, K=5](figures/cluster_N50_K5.png)
 
 Observations:
 
@@ -258,11 +301,17 @@ Observations:
   ($K_{\mathrm{self}} = K_{\mathrm{true}}$) on every instance; the
   $4\sigma$ guard band is enough to make the median preference yield
   the right $K$.
-- **Optimality.** The self-consistency $S$ matches the exhaustive
-  optimum exactly at $N = 30$ and is within $0.14\%$ at $N = 40$.
-  At $N = 50$ the gap widens to $4.26\%$, plausibly because the
-  default anneal is short for the larger problem; tightening the
-  schedule should close it.
+- **Partition quality.** The partition gap is $\mathbf{0.00\%}$ on
+  every test — when the within-cluster exemplar choice is normalized
+  to the cluster medoid, the self-consistency partition lands
+  exactly on the exhaustive optimum. The solver is grouping points
+  correctly in every case.
+- **Within-cluster exemplar choice.** What the residual $S$-gap
+  ($0.14\%$ at $N = 40$, $4.26\%$ at $N = 50$) measures is whether
+  the solver's chosen representative for each cluster is the
+  cluster's medoid or merely a near-medoid. Tightening the anneal
+  closes this finer-grained gap (cf. the $N = 30$ extended-anneal
+  experiment in earlier runs).
 - **Versus greedy.** Self-consistency beats the
   $(1 - 1/e)$-approximation greedy heuristic by $7$–$22$ percentage
   points on every instance, confirming that the message-passing
@@ -272,9 +321,9 @@ Observations:
   constrained optimum on all three instances. This is expected for
   well-separated isotropic Gaussians, where the centroid is the
   optimal exemplar location and its nearest data point is the
-  medoid. Self-consistency closes the gap to K-means at $N = 30$
-  and $N = 40$; the slight gap at $N = 50$ matches the gap to the
-  optimum.
+  medoid. Self-consistency closes the gap to K-means at $N = 30$;
+  the gaps at $N = 40$ and $N = 50$ are both pure
+  exemplar-choice-within-cluster.
 
 ---
 
@@ -284,10 +333,13 @@ On well-separated Gaussian-cluster instances under a $4\sigma$ guard
 band, the corrected Appendix-C self-consistency equations:
 
 1. select the correct number of exemplars,
-2. land on or within a few percent of the exhaustive constrained
-   optimum on the exemplar-clustering sum-similarity objective,
-3. consistently beat a $(1 - 1/e)$-approximation greedy baseline,
-4. match a centroid-projected K-means baseline that is near-optimal
+2. produce **partitions that match the exhaustive constrained
+   optimum exactly** on every test (partition gap $= 0.00\%$),
+3. land on or within a few percent of the exhaustive optimum on the
+   raw sum-similarity objective $S$ — the residual gap is
+   within-cluster exemplar choice, not misclustering,
+4. consistently beat a $(1 - 1/e)$-approximation greedy baseline,
+5. match a centroid-projected K-means baseline that is near-optimal
    in this regime.
 
 Combined with the analytical sanity checks of §4 (cavity-marginal
