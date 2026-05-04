@@ -1,28 +1,26 @@
-# Verifying the Self-Consistency Equations for Exemplar-Based Clustering
+# Self-Consistency Equations for Exemplar-Based Clustering
 
-This document describes the verification setup used to check that the
-finite-temperature self-consistency equations from Appendix C produce
-near-optimal clusterings on the exemplar-based clustering objective.
-It covers the simulation environment, the equations under test, the
-iterative searcher, a quick analytical validation that the equations
-themselves are correct, the benchmark suite, the score metrics, and
-the empirical results.
+This repository is a sandbox for verifying the **exemplar-based clustering self-consistency equations** derived for a manuscript. The manuscript proposes a
+statistical-physics-guided xApp framework for Open RAN coordination tasks: each task is mapped to an Ising-model energy, and self-consistency equations characterizing the low-energy configurations are then learned by a graph neural network so that inference is a single forward pass instead of an iterative search.
 
-> **Bottom line.** Across $N \in \{30, 40, 50\}$ Gaussian-cluster test
-> instances, the self-consistency search:
->
-> - selects the correct number of exemplars
->   $K_{\mathrm{self}} = K_{\mathrm{true}}$,
-> - matches the constrained sum-similarity optimum exactly at $N = 30$,
->   is within $0.14\%$ at $N = 40$, and within $4.26\%$ at $N = 50$,
-> - beats a $(1 - 1/e)$-approximation greedy heuristic by $7$–$22$
->   percentage points on the same metric in every test.
+One-to-one matching is the headline task in the manuscript; exemplar-based clustering is the next coordination problem in line. Before training a GNN to emulate the clustering self-consistency dynamics, two things have to be checked:
 
-> **Note on math rendering.** Equations below use LaTeX math (`$...$`
-> for inline, `$$...$$` for display). The default VSCode markdown
-> preview does not render math; install an extension such as *Markdown
-> Preview Enhanced*, *Markdown+Math*, or *Markdown All in One* to view
-> them. GitHub's web view and Obsidian render them natively.
+1. that the clustering equations were derived correctly, and
+2. that their fixed point actually corresponds to a good clustering.
+
+This repo contains the minimal artifacts needed for both checks: a synthetic clustering dataset generator, a damped-and-annealed fixed-point searcher for the equations, a benchmark suite (K-means, greedy, exhaustive optimum) on the constraint-respecting sum-similarity objective, and a verification script that ties them together.
+
+| File | Role |
+|---|---|
+| [dataset.py](dataset.py) | Gaussian-cluster generator with a guard band on center separation, plus the similarity matrix and diagonal-preference helpers |
+| [solver.py](solver.py) | `SelfConsistencySolver` — finite-temperature, damped, annealed fixed-point searcher for the Appendix-C equations |
+| [benchmarks.py](benchmarks.py) | K-means + projection, greedy submodular, and exhaustive-optimum baselines on the constraint-respecting objective |
+| [verify_clustering.py](verify_clustering.py) | End-to-end verification entry point |
+
+The remaining sections describe the simulation environment, the
+equations themselves, the iterative searcher, a quick analytical
+validation that the equations are correct, the benchmark suite, the
+score metrics, and the empirical results.
 
 ---
 
@@ -122,9 +120,11 @@ $$A^{(t+1)} \;=\; \lambda\, A^{(t)} \;+\; (1 - \lambda)\, \widehat{A}\!\left(R^{
 
    where $\widehat{R}, \widehat{A}$ are the right-hand sides of the
    self-consistency equations and $\lambda$ is the damping factor.
+
 4. **Decide.** After the final inner sweep, form
    $D_{ka} = R_{ka} + A_{ka}$ and read out the exemplar set
    $\mathcal{E} = \{a^\star_k : a^\star_k = \arg\max_a D_{ka}\}$.
+
 5. **Project to feasible.** Force every exemplar to self-assign
    (constraint $x_{aa} \ge x_{ka}$) and assign every non-exemplar to
    its highest-similarity exemplar in $\mathcal{E}$.
