@@ -153,7 +153,8 @@ The off-diagonal $A_{ka}$ in §2 is exactly the log-ratio of the
 exemplar-side cavity marginals,
 
 $$A_{ka} = -T \log \frac{P^{\mathcal{E}}_{ka}(x_{ka} = 0)}{P^{\mathcal{E}}_{ka}(x_{ka} = 1)} .$$
- The intermediate cancellation steps in
+
+The intermediate cancellation steps in
 Appendix C produce this same expression once the additive ``$1$''
 arising from the $x_{aa} = 0$ branch is kept outside the entire
 product over competing assignments to exemplar $a$ (rather than
