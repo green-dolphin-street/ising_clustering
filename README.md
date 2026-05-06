@@ -1,86 +1,65 @@
 # Self-Consistency Equations for Exemplar-Based Clustering
 
-This repository is a sandbox for verifying the **exemplar-based clustering self-consistency equations** derived for a manuscript. The manuscript proposes a
-statistical-physics-guided xApp framework for Open RAN coordination tasks: each task is mapped to an Ising-model energy, and self-consistency equations characterizing the low-energy configurations are then learned by a graph neural network so that inference is a single forward pass instead of an iterative search.
+This repository is for verifying the **exemplar-based clustering self-consistency equations** derived for a paper that proposes a
+statistical-physics-guided xApp framework for Open RAN coordination tasks. Each task is mapped to an Ising-model energy, and self-consistency equations characterizing the low-energy configurations are then learned by a graph neural network so that inference is a simple forward pass instead of an algorithmic search.
 
 One-to-one matching is the headline task in the manuscript; exemplar-based clustering is the next coordination problem in line. Before training a GNN to emulate the clustering self-consistency dynamics, two things have to be checked:
 
 1. that the clustering equations were derived correctly, and
 2. that their fixed point actually corresponds to a good clustering.
 
-This repo contains the minimal artifacts needed for both checks: a synthetic clustering dataset generator, a damped-and-annealed fixed-point searcher for the equations, a benchmark suite (K-means, greedy, exhaustive optimum) on the constraint-respecting sum-similarity objective, and a verification script that ties them together.
+This repo checks the above items with the following:
+- a synthetic clustering dataset generator
+- a damped-and-annealed fixed-point iterative searcher for the equations
+- a benchmark suite (K-means, greedy, exhaustive optimum) on the objectives
+- a verification script that ties them together.
 
 | File | Role |
 |---|---|
 | [dataset.py](dataset.py) | Gaussian-cluster generator with a guard band on center separation, plus the similarity matrix and diagonal-preference helpers |
-| [solver.py](solver.py) | `SelfConsistencySolver` — finite-temperature, damped, annealed fixed-point searcher for the Appendix-C equations |
-| [benchmarks.py](benchmarks.py) | K-means + projection, greedy submodular, and exhaustive-optimum baselines on the constraint-respecting objective |
-| [verify_clustering.py](verify_clustering.py) | End-to-end verification entry point |
-| [visualize.py](visualize.py) | Renders the 2D cluster maps embedded in §7 |
-
-The remaining sections describe the simulation environment, the
-equations themselves, the iterative searcher, a quick analytical
-validation that the equations are correct, the benchmark suite, the
-score metrics, and the empirical results.
-
+| [solver.py](solver.py) | `SelfConsistencySolver` — damped and annealed fixed-point searcher for the derived self-consistency equations |
+| [benchmarks.py](benchmarks.py) | K-means, greedy, and exhaustive-optimum baselines |
+| [verify_clustering.py](verify_clustering.py) | End-to-end verification |
+| [visualize.py](visualize.py) | Renders the 2D cluster maps for visualization |
 ---
 
 ## 1. Simulation settings
 
-Implemented in [dataset.py](dataset.py).
-
 ### 1.1 Synthetic dataset
 
-Sample $N = K \cdot n_{\mathrm{per}}$ points from $K$ isotropic
-Gaussian clusters in $\mathbb{R}^d$:
+[dataset.py](dataset.py) samples data points from $K$ isotropic
+Gaussian clusters in $\mathbb{R}^d$. n_{\mathrm{per}} data points are sampled for each cluster, so the total number of data points is $N = K \cdot n_{\mathrm{per}}$.
 
-- **Cluster centers** placed by **rejection sampling** in the box
-  $[-\text{spread}, \text{spread}]^d$ subject to a guard band: every
-  pair of centers must satisfy
-  $`\lVert \mu_c - \mu_{c'} \rVert_2 \ge m \cdot \sigma_{\mathrm{cluster}}`$
-  for a margin $m$ (default $m = 4$). With $m = 4$, the
-  $2\sigma$ balls of any two clusters do not intersect, so the
-  generative cluster label is essentially the same as the
-  similarity-optimal label for every sample. This removes the
-  boundary-ambiguity blind spot that ARI/NMI have when measuring
-  against generative labels.
-- **Cluster samples.** Each cluster contributes $n_{\mathrm{per}}$
+- For a straightforward verification, the clusters are separated with some tweakable parameters.
+  - Cluster centers are placed by rejection sampling in a box area $[-\text{spread}, \text{spread}]^d$ subject to a guard band.
+  - Specifically, every pair of centers ($\mu_c, \mu_{c'}$) must satisfy $\lVert \mu_c - \mu_{c'} \rVert_2 \ge m \cdot \sigma_{\mathrm{cluster}}$, where $m$ and $\sigma_{\mathrm{cluster}}$ are the margin factor and cluster standard deviation, respectively.
+  - Default parameters are $K = 4$, $n_{\mathrm{per}} = 15$, $d = 2$, $\sigma_{\mathrm{cluster}} = 0.3$, $\text{spread} = 2$, and $m = 4$.
+- Each cluster contributes $n_{\mathrm{per}}$
   draws from $\mathcal{N}(\mu_c, \sigma_{\mathrm{cluster}}^2 I)$.
-- **Resampling cap.** Rejection sampling is capped at
+- Rejection sampling is capped at
   `max_resample_attempts` (default $10{,}000$); if the cap is hit,
-  the call raises with a clear message — the box is too tight for
+  the call raises with a message that says the box is too tight for
   the requested $K$ and margin.
-- **Disabling the guard band.** Setting `min_separation_factor = None`
+- Setting `min_separation_factor = None`
   or $0$ recovers the original uniform-center sampling.
 
 ### 1.2 Similarity matrix
 
-Negative squared Euclidean distance:
+Preferential weights between two data points are based on the negative squared Euclidean distance:
 
 $$w_{ka} = -\lVert y_k - y_a \rVert_2^2 .$$
 
 ### 1.3 Diagonal preference
 
-The diagonal entry $w_{aa}$ — the "self-preference" — controls how
+The diagonal entry $w_{aa}$ (the "self-preference") controls how
 readily a point becomes its own exemplar; higher (less negative)
-values favor more clusters. Following Frey & Dueck (2007), we default
-to the median of the off-diagonal similarities,
+values favor more clusters. Following Frey & Dueck (2007), the default is set as the median of the off-diagonal similarities:
 
 $$w_{aa} = \mathrm{Quantile}_q \left(\{w_{kb}\}_{k \ne b}\right), \qquad q = 0.5.$$
 
----
-
 ## 2. Self-consistency equations under test
 
-The exemplar-clustering Hamiltonian
-$E(\mathbf{x}) = -\sum_{k,a} w_{ka} x_{ka}$ is decomposed
-symmetrically into point-side and exemplar-side cavity marginals.
-With log-likelihood ratios
-
-$$\exp\left(-\tfrac{R_{ka}}{T}\right) = \frac{P^{\mathcal{P}}_{ka}(0)}{P^{\mathcal{P}}_{ka}(1)}, \qquad
-\exp\left(-\tfrac{A_{ka}}{T}\right) = \frac{P^{\mathcal{E}}_{ka}(0)}{P^{\mathcal{E}}_{ka}(1)},$$
-
-the corrected fixed-point system from Appendix C is
+The self-consistency equations for exemplar-clustering are:
 
 $$R_{ka}  =  \frac{w_{ka}}{2}  -  T\log \sum_{b \ne a} \exp\left(\frac{1}{T}\left(\frac{w_{kb}}{2} + A_{kb}\right)\right),$$
 
@@ -88,9 +67,6 @@ $$A_{aa}  =  \frac{w_{aa}}{2}  +  T \sum_{j \ne a} \log\left(1 + \exp\left(\frac
 
 $$A_{ka}  =  \frac{w_{ka}}{2}  -  T \log\Bigg[ 1  +  \exp\left(-\frac{1}{T}\left(\frac{w_{aa}}{2} + R_{aa}\right)\right) \prod_{\substack{j \ne k\\ j \ne a}} \left(1 + \exp\left(\frac{1}{T}\left(\frac{w_{ja}}{2} + R_{ja}\right)\right)\right)^{-1} \Bigg], \quad k \ne a.$$
 
-These are the equations as written in the manuscript; the iterative
-searcher in §3 evaluates exactly these expressions at every fixed,
-finite temperature $T$.
 
 > **Notation in the code.** Inside [solver.py](solver.py) the helper
 > `softplus_T(x) := T log(1 + exp(x/T))` is used as a numerically
@@ -108,21 +84,19 @@ Implemented as `SelfConsistencySolver` in [solver.py](solver.py).
 
 1. **Initialize** $R^{(0)} = A^{(0)} = 0$.
 2. **Anneal** the temperature geometrically from $T_{\mathrm{init}}$
-   to $T_{\mathrm{final}}$ in $n_{\mathrm{anneal}}$ steps. Annealing
-   is a *numerical* device for navigating the fixed-point landscape
-   smoothly — every individual sweep evaluates the finite-$T$
-   equations of §2 verbatim.
-3. **Inner sweeps.** At each $T$, run $n_{\mathrm{iter}}$ damped
-   message-passing sweeps,
+   to $T_{\mathrm{final}}$ in $n_{\mathrm{anneal}}$ steps (defaults
+   $T_{\mathrm{init}} = 2.0$, $T_{\mathrm{final}} = 0.02$,
+   $n_{\mathrm{anneal}} = 20$).
+3. **Search:** Run $n_{\mathrm{iter}}$ damped iterations:
 
 $$R^{(t+1)}  =  \lambda R^{(t)}  +  (1 - \lambda) \widehat{R}\left(R^{(t)}, A^{(t)}; T\right),$$
 
 $$A^{(t+1)}  =  \lambda A^{(t)}  +  (1 - \lambda) \widehat{A}\left(R^{(t+1)}, A^{(t)}; T\right),$$
 
    where $\widehat{R}, \widehat{A}$ are the right-hand sides of the
-   self-consistency equations and $\lambda$ is the damping factor.
+   self-consistency equations and $\lambda$ is the damping factor defaulted to $0.5$.
 
-4. **Decide.** After the final inner sweep, form
+4. **Decision:** After the final inner sweep, obtain
    $D_{ka} = R_{ka} + A_{ka}$ and read out the exemplar set
    $\mathcal{E} = \{a^\star_k : a^\star_k = \arg\max_a D_{ka}\}$.
 
@@ -130,64 +104,8 @@ $$A^{(t+1)}  =  \lambda A^{(t)}  +  (1 - \lambda) \widehat{A}\left(R^{(t+1)}, A^
    (constraint $x_{aa} \ge x_{ka}$) and assign every non-exemplar to
    its highest-similarity exemplar in $\mathcal{E}$.
 
-### 3.2 Default hyperparameters
 
-| Parameter | Default | Meaning |
-|---|---|---|
-| $T_{\mathrm{init}}$ | $2.0$ | Starting temperature (smooth landscape) |
-| $T_{\mathrm{final}}$ | $0.02$ | Final temperature (sharp landscape) |
-| $n_{\mathrm{anneal}}$ | $20$ | Geometric anneal steps |
-| $n_{\mathrm{iter}}$ | $30$ | Damped sweeps per temperature |
-| $\lambda$ | $0.5$ | Damping factor |
-
----
-
-## 4. Quick validation that the derived equations are correct
-
-Before running the empirical benchmarks, two independent sanity
-checks confirm the equations of §2 are the right ones.
-
-### 4.1 Cavity-marginal re-derivation
-
-The off-diagonal $A_{ka}$ in §2 is exactly the log-ratio of the
-exemplar-side cavity marginals,
-
-$$A_{ka} = -T \log \frac{P^{\mathcal{E}}_{ka}(x_{ka} = 0)}{P^{\mathcal{E}}_{ka}(x_{ka} = 1)} .$$
-
-The intermediate cancellation steps in
-Appendix C produce this same expression once the additive ``$1$''
-arising from the $x_{aa} = 0$ branch is kept outside the entire
-product over competing assignments to exemplar $a$ (rather than
-absorbed into a separate factor). This was the source of the typo
-flagged earlier in the manuscript and corrected in
-[manuscript.tex](manuscript.tex).
-
-### 4.2 Reduction to standard affinity propagation
-
-A second consistency check is that the Appendix-C system reproduces
-a known correct algorithm. Specifically, with rescaled messages
-$\tilde A := 2A$ and $\tilde R := 2R$, the equations of §2 satisfy
-the identity
-
-$$\tilde A_{ka}  =  w_{ka} + a_{\mathrm{AP}}(k, a), \qquad
-  \tilde R_{ka}  =  w_{ka}  -  \max_{b \ne a}\left(w_{kb} + \tilde A_{kb}\right),$$
-
-where $a_{\mathrm{AP}}$ is the availability message of the standard
-affinity-propagation algorithm of Frey & Dueck (2007). This shows
-the Appendix-C derivation is a finite-temperature,
-symmetric-splitting reformulation of an algorithm whose
-correctness is already established in the literature, and gives an
-independent confirmation that the equations are right.
-
-Affinity propagation is therefore *not* used as an empirical
-benchmark — comparing two algorithms that are equivalent up to a
-known message rescaling would be circular. The benchmarks in §5
-are external clustering algorithms or solvers of the optimization
-problem itself.
-
----
-
-## 5. Benchmarks
+## 4. Benchmarks
 
 All benchmarks are evaluated on the same constraint-respecting
 sum-similarity objective
@@ -201,7 +119,7 @@ constraint $x_{aa} \ge x_{ka}$ being satisfied.
 
 Benchmarks are implemented in [benchmarks.py](benchmarks.py).
 
-### 5.1 K-means + exemplar projection
+### 4.1 K-means + exemplar projection
 
 Run K-means on the raw points, take the centroid of each cluster,
 project to the nearest data point, and score $S$ on that exemplar
@@ -210,7 +128,7 @@ points" constraint as the Appendix-C objective. Reported at both
 $K = K_{\mathrm{self}}$ (matched, fair comparison) and
 $K = K_{\mathrm{true}}$ (oracle).
 
-### 5.2 Greedy submodular maximization
+### 4.2 Greedy submodular maximization
 
 Greedily grow $\mathcal{E}$ one element at a time, each step picking
 the data point that maximally improves $S$. The objective is
@@ -218,7 +136,7 @@ monotone non-decreasing in $\mathcal{E}$, so greedy enjoys the
 standard $(1 - 1/e) \approx 0.63$ approximation guarantee
 (Nemhauser, Wolsey, Fisher 1978). Run at $K = K_{\mathrm{self}}$.
 
-### 5.3 Exhaustive optimum
+### 4.3 Exhaustive optimum
 
 Brute-force search over all $\binom{N}{K_{\mathrm{self}}}$ exemplar
 subsets, evaluated under $S$. Vectorized in NumPy over chunks of
@@ -228,7 +146,7 @@ combinatorial size exceeds the configured cap (default $5$M).
 
 ---
 
-## 6. Score metrics
+## 5. Score metrics
 
 | Metric | Definition | Direction | What it measures |
 |---|---|---|---|
@@ -248,7 +166,7 @@ constraint-respecting $S$, so the comparison is apples-to-apples.
 
 ---
 
-## 7. Empirical results
+## 6. Empirical results
 
 Run via [verify_clustering.py](verify_clustering.py) with the default
 hyperparameters in §3.2, $m = 4$ guard band, $q = 0.5$ preference,
@@ -262,7 +180,7 @@ and exhaustive cap $5{,}000{,}000$.
 
 Wall-clock for the full sweep (incl. exhaustive optimum): $\sim 10$s.
 
-### 2D maps
+### 7. 2D maps
 
 Each figure shows three panels for one test case: (i) ground-truth
 labels with the true cluster centers (×), (ii) the self-consistency

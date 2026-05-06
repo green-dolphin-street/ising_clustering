@@ -2,3 +2,4 @@ manuscript.*
 /__pycache__/
 settings.local.json
 _*.py
+max_sum_clustering_(AP).pdf
